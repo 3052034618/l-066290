@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { DollarSign, ShoppingCart, TrendingUp, Calendar, CreditCard, ArrowUpRight, Download, MousePointerClick } from 'lucide-react';
 import { useAnalyticsStore } from '@/store/analyticsStore';
-import { useCabinetStore } from '@/store/cabinetStore';
 import StatCard from '@/components/ui/StatCard';
 import LineAreaChart from '@/components/chart/LineAreaChart';
 import BarChart from '@/components/chart/BarChart';
@@ -22,7 +21,6 @@ const AnalyticsPage: React.FC = () => {
     getOverviewStats,
     exportDailyReport,
   } = useAnalyticsStore();
-  const { cabinets } = useCabinetStore();
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string>('');
   const [showDetailModal, setShowDetailModal] = useState(false);

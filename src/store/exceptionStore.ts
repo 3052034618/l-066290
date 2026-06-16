@@ -10,7 +10,8 @@ interface ExceptionState {
   setSelectedType: (type: ExceptionType | 'all') => void;
   getFilteredExceptions: () => ExceptionRecord[];
   getByStatus: (status: ExceptionStatus) => ExceptionRecord[];
-  addException: (data: Omit<ExceptionRecord, 'id' | 'createdAt' | 'status'>) => void;
+  addException: (data: Omit<ExceptionRecord, 'id' | 'createdAt' | 'status'>) => string;
+  updateExceptionHandler: (id: string, handlerId: string, handlerName: string) => void;
   updateStatus: (id: string, status: ExceptionStatus, handlerId?: string, handlerName?: string) => void;
   getStats: () => {
     total: number;
@@ -50,6 +51,17 @@ export const useExceptionStore = create<ExceptionState>((set, get) => ({
     };
     set(state => ({
       exceptions: [newException, ...state.exceptions],
+    }));
+    return newException.id;
+  },
+  
+  updateExceptionHandler: (id, handlerId, handlerName) => {
+    set(state => ({
+      exceptions: state.exceptions.map(e => 
+        e.id === id 
+          ? { ...e, handlerId, handlerName }
+          : e
+      ),
     }));
   },
   

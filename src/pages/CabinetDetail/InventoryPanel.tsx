@@ -1,18 +1,16 @@
 import React from 'react';
-import { Package, AlertTriangle, Clock, ToggleLeft } from 'lucide-react';
+import { Package, AlertTriangle, Clock } from 'lucide-react';
 import ProgressBar from '@/components/ui/ProgressBar';
-import StatusBadge from '@/components/ui/StatusBadge';
 import { ProductInventory } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { formatDate, getDaysUntil } from '@/utils/date';
 import { useProductStore } from '@/store/productStore';
 
 interface InventoryPanelProps {
-  cabinetId: string;
   inventories: ProductInventory[];
 }
 
-const InventoryPanel: React.FC<InventoryPanelProps> = ({ cabinetId, inventories }) => {
+const InventoryPanel: React.FC<InventoryPanelProps> = ({ inventories }) => {
   const { toggleShelfStatus } = useProductStore();
   
   const lowStockItems = inventories.filter(inv => inv.currentStock <= inv.minStockThreshold && inv.isOnShelf);

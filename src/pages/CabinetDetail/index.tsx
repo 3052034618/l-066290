@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useCabinetStore } from '@/store/cabinetStore';
 import { useProductStore } from '@/store/productStore';
 import { useExceptionStore } from '@/store/exceptionStore';
+import CabinetSuggestionPanel from '@/components/business/CabinetSuggestionPanel';
 import CabinetInfo from './CabinetInfo';
 import QuickActions from './QuickActions';
 import SalesChart from './SalesChart';
@@ -43,8 +44,11 @@ const CabinetDetailPage: React.FC = () => {
       <QuickActions cabinet={cabinet} />
       <SalesChart cabinetId={cabinet.id} />
       <div className="grid grid-cols-2 gap-6 mt-6">
-        <InventoryPanel cabinetId={cabinet.id} inventories={cabinetInventories} />
+        <InventoryPanel inventories={cabinetInventories} />
         <ExceptionHistory exceptions={cabinetExceptions} />
+      </div>
+      <div className="mt-6">
+        <CabinetSuggestionPanel cabinetId={cabinet.id} />
       </div>
     </div>
   );

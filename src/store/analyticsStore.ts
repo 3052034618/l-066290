@@ -4,6 +4,13 @@ import { mockDailySales, mockCabinetRevenues, mockSaleRecords, getCabinetSales }
 import { mockCabinets } from '@/mock/cabinets';
 import { mockExceptions } from '@/mock/exceptions';
 import { mockTasks } from '@/mock/tasks';
+import { useProductStore } from './productStore';
+
+export interface CabinetSuggestion {
+  type: 'price' | 'inspection' | 'expansion' | 'selection' | 'positive' | 'warning';
+  text: string;
+  priority: 'high' | 'medium' | 'low';
+}
 
 interface AnalyticsState {
   dailySales: DailySalesData[];
@@ -29,7 +36,9 @@ interface AnalyticsState {
     exceptionCount: number;
     replenishmentCount: number;
     salesGrowth: number;
+    lowStockCount: number;
   } | null;
+  generateCabinetSuggestions: (cabinetId: string) => CabinetSuggestion[];
   getPaymentExceptions: () => SaleRecord[];
   exportDailyReport: () => string;
 }
@@ -82,7 +91,6 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
     if (!cabinet || !revenue) return null;
     
     const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     
     const exceptionCount = mockExceptions.filter(
@@ -93,11 +101,17 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       t => t.cabinetId === cabinetId && t.type === 'replenishment' && new Date(t.createdAt).getTime() > thirtyDaysAgo
     ).length;
     
-    const firstWeek = sales.slice(0, Math.floor(sales.length / 2));
-    const secondWeek = sales.slice(Math.floor(sales.length / 2));
-    const firstAvg = firstWeek.length > 0 ? firstWeek.reduce((s, d) => s + d.sales, 0) / firstWeek.length : 0;
-    const secondAvg = secondWeek.length > 0 ? secondWeek.reduce((s, d) => s + d.sales, 0) / secondWeek.length : 0;
-    const salesGrowth = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 100) / 10 : 0;
+    const { inventories } = useProductStore.getState();
+    const lowStockCount = inventories.filter(
+      inv => inv.cabinetId === cabinetId && inv.currentStock <= inv.minStockThreshold && inv.isOnShelf
+    ).length;
+    
+    const halfLen = Math.floor(sales.length / 2);
+    const firstHalf = sales.slice(0, halfLen);
+    const secondHalf = sales.slice(halfLen);
+    const firstAvg = firstHalf.length > 0 ? firstHalf.reduce((s, d) => s + d.sales, 0) / firstHalf.length : 0;
+    const secondAvg = secondHalf.length > 0 ? secondHalf.reduce((s, d) => s + d.sales, 0) / secondHalf.length : 0;
+    const salesGrowth = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 1000) / 10 : 0;
     
     return {
       cabinet,
@@ -106,7 +120,97 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
       exceptionCount,
       replenishmentCount,
       salesGrowth,
+      lowStockCount,
     };
+  },
+  
+  generateCabinetSuggestions: (cabinetId): CabinetSuggestion[] => {
+    const detail = get().getCabinetDetail(cabinetId);
+    if (!detail) return [];
+    
+    const { revenue, exceptionCount, replenishmentCount, salesGrowth, lowStockCount } = detail;
+    const suggestions: CabinetSuggestion[] = [];
+    
+    if (salesGrowth > 8) {
+      suggestions.push({
+        type: 'expansion',
+        text: `销售增长${salesGrowth.toFixed(1)}%，势头强劲，建议评估增设货柜或扩容的可行性`,
+        priority: 'high',
+      });
+      if (replenishmentCount > 10) {
+        suggestions.push({
+          type: 'inspection',
+          text: `补货频次高（近30天${replenishmentCount}次），建议加密巡视频次，避免热门商品断货`,
+          priority: 'medium',
+        });
+      }
+    } else if (salesGrowth > 3) {
+      suggestions.push({
+        type: 'positive',
+        text: `销售稳步增长${salesGrowth.toFixed(1)}%，保持当前运营策略，持续关注`,
+        priority: 'low',
+      });
+    } else if (salesGrowth < -8) {
+      suggestions.push({
+        type: 'selection',
+        text: `销售下滑${Math.abs(salesGrowth).toFixed(1)}%，建议优化选品结构，更换滞销商品`,
+        priority: 'high',
+      });
+      suggestions.push({
+        type: 'price',
+        text: `销售持续下滑，建议调研周边竞品价格，考虑针对性调价或推出促销`,
+        priority: 'high',
+      });
+    } else if (salesGrowth < -3) {
+      suggestions.push({
+        type: 'warning',
+        text: `销售出现下滑${Math.abs(salesGrowth).toFixed(1)}%，建议加强该点位巡检，排查原因`,
+        priority: 'medium',
+      });
+    }
+    
+    if (exceptionCount > 5) {
+      suggestions.push({
+        type: 'inspection',
+        text: `近30天异常${exceptionCount}次，频发，建议加密巡检频次并全面排查设备`,
+        priority: 'high',
+      });
+    } else if (exceptionCount > 2) {
+      suggestions.push({
+        type: 'inspection',
+        text: `近30天异常${exceptionCount}次，建议关注设备稳定性，适当增加巡检`,
+        priority: 'medium',
+      });
+    }
+    
+    if (lowStockCount > 4) {
+      suggestions.push({
+        type: 'warning',
+        text: `当前有${lowStockCount}件商品库存偏低，建议尽快安排补货`,
+        priority: 'high',
+      });
+    }
+    
+    if (revenue && revenue.growthRate > 15) {
+      suggestions.push({
+        type: 'expansion',
+        text: `环比增长${revenue.growthRate}%，该点位价值高，可考虑作为重点点位经验复制`,
+        priority: 'medium',
+      });
+    }
+    
+    if (suggestions.length === 0) {
+      suggestions.push({
+        type: 'positive',
+        text: '该点位整体运营平稳，销量、异常、补货均在正常范围，保持现有策略',
+        priority: 'low',
+      });
+    }
+    
+    return suggestions.sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2 };
+      return order[a.priority] - order[b.priority];
+    });
   },
   
   exportDailyReport: () => {

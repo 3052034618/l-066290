@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
-import { X, TrendingUp, TrendingDown, AlertTriangle, Package, DollarSign, MapPin, BarChart3, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, Package, DollarSign, MapPin, BarChart3, Calendar } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import StatCard from '@/components/ui/StatCard';
 import LineAreaChart from '@/components/chart/LineAreaChart';
 import StatusBadge from '@/components/ui/StatusBadge';
+import CabinetSuggestionPanel from '@/components/business/CabinetSuggestionPanel';
 import { useAnalyticsStore } from '@/store/analyticsStore';
 import { formatCurrency } from '@/utils/format';
 
@@ -19,7 +20,8 @@ const CabinetDetailModal: React.FC<CabinetDetailModalProps> = ({ cabinetId, isOp
   const detail = useMemo(() => {
     if (!cabinetId) return null;
     return getCabinetDetail(cabinetId);
-  }, [cabinetId, getCabinetDetail, timeRange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cabinetId, getCabinetDetail]);
 
   if (!detail) return null;
 
@@ -86,6 +88,8 @@ const CabinetDetailModal: React.FC<CabinetDetailModalProps> = ({ cabinetId, isOp
             销售趋势
             <span className="text-xs font-normal text-neutral-400 ml-1">
               {timeRange === '7d' ? '近7天' : timeRange === '14d' ? '近14天' : '近30天'}
+              <span className="mx-1">·</span>
+              前后半周期对比增长 <span className={salesGrowth >= 0 ? 'text-success-600 font-medium' : 'text-danger-600 font-medium'}>{salesGrowth >= 0 ? '+' : ''}{salesGrowth.toFixed(1)}%</span>
             </span>
           </h4>
           <LineAreaChart data={sales} height={200} showOrders />
@@ -133,32 +137,7 @@ const CabinetDetailModal: React.FC<CabinetDetailModalProps> = ({ cabinetId, isOp
           </div>
         </div>
 
-        <div className="bg-primary-50/50 border border-primary-100 rounded-xl p-4">
-          <h5 className="text-sm font-semibold text-primary-700 mb-2">💡 运营建议</h5>
-          <ul className="text-sm text-primary-600/80 space-y-1.5">
-            {salesGrowth > 5 && (
-              <li>• 销售增长势头良好，建议增加热门商品库存，避免缺货</li>
-            )}
-            {salesGrowth < -5 && (
-              <li>• 销售呈下降趋势，建议调研周边竞品，考虑价格调整或更换商品组合</li>
-            )}
-            {exceptionCount > 3 && (
-              <li>• 异常次数偏多，建议安排一次全面设备巡检，排查根本原因</li>
-            )}
-            {replenishmentCount > 10 && (
-              <li>• 补货频次高，该点位价值高，可考虑增设第二台货柜提升产能</li>
-            )}
-            {revenue && revenue.growthRate > 10 && (
-              <li>• 环比增长显著，持续关注，可作为标杆点位总结经验</li>
-            )}
-            {revenue && revenue.growthRate < -10 && (
-              <li>• 环比下滑明显，建议尽快实地调研，了解周边环境变化</li>
-            )}
-            {salesGrowth >= -5 && salesGrowth <= 5 && exceptionCount <= 3 && replenishmentCount <= 10 && (
-              <li>• 整体运营平稳，建议保持现有策略，持续关注数据变化</li>
-            )}
-          </ul>
-        </div>
+        <CabinetSuggestionPanel cabinetId={cabinetId} />
       </div>
     </Modal>
   );

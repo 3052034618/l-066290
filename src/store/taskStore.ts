@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { Task, TaskStatus, TaskPriority, TaskType } from '@/types';
+import { Task, TaskStatus, TaskPriority, TaskType, TaskProductResult } from '@/types';
 import { mockTasks } from '@/mock/tasks';
 import { mockInspectors } from '@/mock/inspectors';
 import { Inspector } from '@/types';
+import { useProductStore } from './productStore';
 
 interface TaskState {
   tasks: Task[];
@@ -18,6 +19,12 @@ interface TaskState {
   getReplenishmentTasks: () => Task[];
   assignTask: (taskId: string, inspectorId: string) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  completeReplenishmentTask: (
+    taskId: string,
+    results: TaskProductResult[],
+    note?: string,
+    photoUrl?: string
+  ) => void;
   createTask: (data: Partial<Task> & Omit<Task, 'id' | 'createdAt' | 'status'> & { id?: string }) => void;
   getStats: () => {
     total: number;
@@ -76,6 +83,33 @@ export const useTaskStore = create<TaskState>((set, get) => ({
               status, 
               completedAt: status === 'completed' ? new Date() : t.completedAt 
             } 
+          : t
+      ),
+    }));
+  },
+  
+  completeReplenishmentTask: (taskId, results, note, photoUrl) => {
+    const task = get().tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const { restockCabinetProduct } = useProductStore.getState();
+    results.forEach(r => {
+      if (r.actualQuantity > 0) {
+        restockCabinetProduct(task.cabinetId, r.productId, r.actualQuantity);
+      }
+    });
+    
+    set(state => ({
+      tasks: state.tasks.map(t => 
+        t.id === taskId
+          ? {
+              ...t,
+              status: 'completed',
+              completedAt: new Date(),
+              completionResults: results,
+              completionNote: note,
+              completionPhotoUrl: photoUrl,
+            }
           : t
       ),
     }));

@@ -26,6 +26,7 @@ interface ProductState {
   getCategories: () => string[];
   getProducts: () => Product[];
   getProductById: (id: string) => Product | undefined;
+  restockCabinetProduct: (cabinetId: string, productId: string, actualQuantity: number) => void;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
@@ -124,4 +125,16 @@ export const useProductStore = create<ProductState>((set, get) => ({
   getProducts: () => get().products,
   
   getProductById: (id) => get().products.find(p => p.id === id),
+  
+  restockCabinetProduct: (cabinetId, productId, actualQuantity) => {
+    set(state => ({
+      inventories: state.inventories.map(inv => {
+        if (inv.cabinetId === cabinetId && inv.productId === productId) {
+          const newStock = Math.min(inv.currentStock + actualQuantity, inv.maxStock);
+          return { ...inv, currentStock: newStock };
+        }
+        return inv;
+      }),
+    }));
+  },
 }));

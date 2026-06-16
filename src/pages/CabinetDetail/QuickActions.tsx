@@ -5,7 +5,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { useTaskStore } from '@/store/taskStore';
 import { useExceptionStore } from '@/store/exceptionStore';
 import { useProductStore } from '@/store/productStore';
-import { Cabinet, Product, ExceptionType, ExceptionSeverity, TaskPriority } from '@/types';
+import { Cabinet, ExceptionType, ExceptionSeverity } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { getDaysUntil } from '@/utils/date';
 
@@ -16,7 +16,7 @@ interface QuickActionsProps {
 const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
   const { createTask, inspectors, assignTask } = useTaskStore();
   const { addException } = useExceptionStore();
-  const { inventories, products, updatePrice, getLowStockItems, getExpiringItems } = useProductStore();
+  const { products, updatePrice, getLowStockItems, getExpiringItems } = useProductStore();
 
   const [showReplenishModal, setShowReplenishModal] = useState(false);
   const [showRepairModal, setShowRepairModal] = useState(false);
@@ -107,7 +107,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
   };
 
   const handleReportException = () => {
-    addException({
+    const expId = addException({
       cabinetId: cabinet.id,
       cabinet,
       type: exceptionType,
@@ -115,18 +115,26 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
       description: exceptionDesc || `${cabinet.name} - 运营异常`,
     });
 
-    if (selectedInspectorId && (exceptionType === 'device_fault' || exceptionType === 'network_error')) {
+    if (selectedInspectorId) {
       const taskId = `t${Date.now()}`;
+      let taskType: 'replenishment' | 'maintenance' | 'inspection' | 'price_adjustment' = 'inspection';
+      if (exceptionType === 'device_fault') taskType = 'maintenance';
+      else if (exceptionType === 'network_error') taskType = 'maintenance';
+      else if (exceptionType === 'payment_error') taskType = 'inspection';
+      else if (exceptionType === 'temperature_abnormal') taskType = 'inspection';
+      
       createTask({
         id: taskId,
         cabinetId: cabinet.id,
         cabinet,
-        type: exceptionType === 'device_fault' ? 'maintenance' : 'inspection',
+        type: taskType,
         priority: exceptionSeverity === 'critical' || exceptionSeverity === 'high' ? 'urgent' : 'high',
-        description: exceptionDesc || `${cabinet.name} - 异常处理`,
+        description: exceptionDesc || `${cabinet.name} - ${getExceptionTypeText(exceptionType)}处理`,
         dueTime: new Date(Date.now() + 3 * 3600 * 1000),
       });
       assignTask(taskId, selectedInspectorId);
+      
+      useExceptionStore.getState().updateExceptionHandler(expId, selectedInspectorId, selectedInspector?.name || '');
     }
 
     setShowExceptionModal(false);
@@ -578,10 +586,9 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
             />
           </div>
 
-          {(exceptionType === 'device_fault' || exceptionType === 'network_error') && (
-            <div className="relative">
+          <div className="relative">
               <label className="block text-sm font-medium text-neutral-700 mb-2">
-                安排处理人员 <span className="text-neutral-400 font-normal">（可选，将生成维修任务）</span>
+                安排处理人员 <span className="text-neutral-400 font-normal">（可选，将自动生成处理任务）</span>
               </label>
               <button
                 onClick={() => setShowInspectorDropdown(!showInspectorDropdown)}
@@ -622,7 +629,6 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
                 </div>
               )}
             </div>
-          )}
         </div>
       </Modal>
 

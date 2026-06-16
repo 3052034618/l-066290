@@ -73,6 +73,14 @@ export type TaskType = 'replenishment' | 'maintenance' | 'inspection' | 'price_a
 export type TaskStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
+export interface TaskProductResult {
+  productId: string;
+  productName?: string;
+  expectedQuantity: number;
+  actualQuantity: number;
+  shortageReason?: string;
+}
+
 export interface Task {
   id: string;
   cabinetId: string;
@@ -87,6 +95,9 @@ export interface Task {
   dueTime: Date;
   createdAt: Date;
   completedAt?: Date;
+  completionResults?: TaskProductResult[];
+  completionNote?: string;
+  completionPhotoUrl?: string;
 }
 
 export interface Inspector {
