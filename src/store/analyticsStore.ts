@@ -1,6 +1,9 @@
 import { create } from 'zustand';
-import { DailySalesData, CabinetRevenue, SaleRecord } from '@/types';
+import { DailySalesData, CabinetRevenue, SaleRecord, Cabinet } from '@/types';
 import { mockDailySales, mockCabinetRevenues, mockSaleRecords, getCabinetSales } from '@/mock/sales';
+import { mockCabinets } from '@/mock/cabinets';
+import { mockExceptions } from '@/mock/exceptions';
+import { mockTasks } from '@/mock/tasks';
 
 interface AnalyticsState {
   dailySales: DailySalesData[];
@@ -19,6 +22,14 @@ interface AnalyticsState {
     growthRate: number;
   };
   getCabinetDailySales: (cabinetId: string) => DailySalesData[];
+  getCabinetDetail: (cabinetId: string) => {
+    cabinet: Cabinet | undefined;
+    revenue: CabinetRevenue | undefined;
+    sales: DailySalesData[];
+    exceptionCount: number;
+    replenishmentCount: number;
+    salesGrowth: number;
+  } | null;
   getPaymentExceptions: () => SaleRecord[];
   exportDailyReport: () => string;
 }
@@ -61,6 +72,41 @@ export const useAnalyticsStore = create<AnalyticsState>((set, get) => ({
   
   getPaymentExceptions: () => {
     return get().saleRecords.filter(r => r.paymentStatus !== 'success');
+  },
+  
+  getCabinetDetail: (cabinetId) => {
+    const cabinet = mockCabinets.find(c => c.id === cabinetId);
+    const revenue = get().cabinetRevenues.find(r => r.cabinetId === cabinetId);
+    const sales = get().getCabinetDailySales(cabinetId);
+    
+    if (!cabinet || !revenue) return null;
+    
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    
+    const exceptionCount = mockExceptions.filter(
+      e => e.cabinetId === cabinetId && new Date(e.createdAt).getTime() > thirtyDaysAgo
+    ).length;
+    
+    const replenishmentCount = mockTasks.filter(
+      t => t.cabinetId === cabinetId && t.type === 'replenishment' && new Date(t.createdAt).getTime() > thirtyDaysAgo
+    ).length;
+    
+    const firstWeek = sales.slice(0, Math.floor(sales.length / 2));
+    const secondWeek = sales.slice(Math.floor(sales.length / 2));
+    const firstAvg = firstWeek.length > 0 ? firstWeek.reduce((s, d) => s + d.sales, 0) / firstWeek.length : 0;
+    const secondAvg = secondWeek.length > 0 ? secondWeek.reduce((s, d) => s + d.sales, 0) / secondWeek.length : 0;
+    const salesGrowth = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 100) / 10 : 0;
+    
+    return {
+      cabinet,
+      revenue,
+      sales,
+      exceptionCount,
+      replenishmentCount,
+      salesGrowth,
+    };
   },
   
   exportDailyReport: () => {

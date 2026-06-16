@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useCabinetStore } from '@/store/cabinetStore';
+import { useProductStore } from '@/store/productStore';
 import { useExceptionStore } from '@/store/exceptionStore';
 import CabinetInfo from './CabinetInfo';
 import QuickActions from './QuickActions';
@@ -11,12 +12,19 @@ import EmptyState from '@/components/ui/EmptyState';
 
 const CabinetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { getCabinetById, getCabinetInventory } = useCabinetStore();
+  const { getCabinetById } = useCabinetStore();
+  const { inventories } = useProductStore();
   const { exceptions } = useExceptionStore();
 
   const cabinet = getCabinetById(id || '');
-  const inventories = cabinet ? getCabinetInventory(cabinet.id) : [];
-  const cabinetExceptions = exceptions.filter(e => e.cabinetId === id);
+  
+  const cabinetInventories = useMemo(() => {
+    return inventories.filter(inv => inv.cabinetId === id);
+  }, [inventories, id]);
+  
+  const cabinetExceptions = useMemo(() => {
+    return exceptions.filter(e => e.cabinetId === id);
+  }, [exceptions, id]);
 
   if (!cabinet) {
     return (
@@ -35,7 +43,7 @@ const CabinetDetailPage: React.FC = () => {
       <QuickActions cabinet={cabinet} />
       <SalesChart cabinetId={cabinet.id} />
       <div className="grid grid-cols-2 gap-6 mt-6">
-        <InventoryPanel inventories={inventories} />
+        <InventoryPanel cabinetId={cabinet.id} inventories={cabinetInventories} />
         <ExceptionHistory exceptions={cabinetExceptions} />
       </div>
     </div>

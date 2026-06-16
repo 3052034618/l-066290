@@ -18,7 +18,7 @@ interface TaskState {
   getReplenishmentTasks: () => Task[];
   assignTask: (taskId: string, inspectorId: string) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
-  createTask: (data: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
+  createTask: (data: Partial<Task> & Omit<Task, 'id' | 'createdAt' | 'status'> & { id?: string }) => void;
   getStats: () => {
     total: number;
     pending: number;
@@ -84,10 +84,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   createTask: (data) => {
     const newTask: Task = {
       ...data,
-      id: `t${Date.now()}`,
+      id: data.id || `t${Date.now()}`,
       status: 'pending',
       createdAt: new Date(),
-    };
+    } as Task;
     set(state => ({
       tasks: [newTask, ...state.tasks],
     }));

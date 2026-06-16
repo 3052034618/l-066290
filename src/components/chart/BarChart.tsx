@@ -20,12 +20,14 @@ interface BarChartProps {
   data: DataPoint[];
   height?: number;
   dataKeys: { key: string; name: string; color: string }[];
+  onBarClick?: (data: DataPoint) => void;
 }
 
 const BarChartComponent: React.FC<BarChartProps> = ({
   data,
   height = 300,
   dataKeys,
+  onBarClick,
 }) => {
   return (
     <div style={{ width: '100%', height }}>
@@ -70,6 +72,8 @@ const BarChartComponent: React.FC<BarChartProps> = ({
               fill={dk.color}
               radius={[6, 6, 0, 0]}
               barSize={28}
+              onClick={onBarClick ? (_data, index) => onBarClick(data[index]) : undefined}
+              cursor={onBarClick ? 'pointer' : 'default'}
             />
           ))}
         </RechartsBarChart>

@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
-import { DollarSign, ShoppingCart, TrendingUp, Calendar, CreditCard, ArrowUpRight, Download } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { DollarSign, ShoppingCart, TrendingUp, Calendar, CreditCard, ArrowUpRight, Download, MousePointerClick } from 'lucide-react';
 import { useAnalyticsStore } from '@/store/analyticsStore';
+import { useCabinetStore } from '@/store/cabinetStore';
 import StatCard from '@/components/ui/StatCard';
 import LineAreaChart from '@/components/chart/LineAreaChart';
 import BarChart from '@/components/chart/BarChart';
+import CabinetDetailModal from './CabinetDetailModal';
 
 const timeRanges: { key: '7d' | '14d' | '30d'; label: string }[] = [
   { key: '7d', label: '7天' },
@@ -20,6 +22,10 @@ const AnalyticsPage: React.FC = () => {
     getOverviewStats,
     exportDailyReport,
   } = useAnalyticsStore();
+  const { cabinets } = useCabinetStore();
+
+  const [selectedCabinetId, setSelectedCabinetId] = useState<string>('');
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const stats = getOverviewStats();
 
@@ -33,10 +39,18 @@ const AnalyticsPage: React.FC = () => {
       .slice(0, 8)
       .map((cr) => ({
         name: cr.cabinetName,
+        cabinetId: cr.cabinetId,
         今日营收: cr.todayRevenue,
         本周营收: cr.weekRevenue,
       }));
   }, [cabinetRevenues]);
+
+  const handleBarClick = (data: { name: string; cabinetId?: string }) => {
+    if (data.cabinetId) {
+      setSelectedCabinetId(data.cabinetId);
+      setShowDetailModal(true);
+    }
+  };
 
   const handleExportReport = () => {
     const report = exportDailyReport();
@@ -141,7 +155,13 @@ const AnalyticsPage: React.FC = () => {
       </div>
 
       <div className="card p-6">
-        <h3 className="text-lg font-semibold text-neutral-800 mb-4">点位收益对比</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-neutral-800">点位收益对比</h3>
+          <span className="text-xs text-neutral-400 flex items-center gap-1">
+            <MousePointerClick size={12} />
+            点击柱状图查看点位详情
+          </span>
+        </div>
         <BarChart
           data={barChartData}
           height={320}
@@ -149,8 +169,18 @@ const AnalyticsPage: React.FC = () => {
             { key: '今日营收', name: '今日营收', color: '#1677FF' },
             { key: '本周营收', name: '本周营收', color: '#00B42A' },
           ]}
+          onBarClick={handleBarClick}
         />
       </div>
+
+      <CabinetDetailModal
+        cabinetId={selectedCabinetId}
+        isOpen={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedCabinetId('');
+        }}
+      />
     </div>
   );
 };
