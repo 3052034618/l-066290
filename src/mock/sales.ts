@@ -67,16 +67,34 @@ function generateSaleRecords(count: number = 20): SaleRecord[] {
 
 export const mockSaleRecords: SaleRecord[] = generateSaleRecords(50);
 
+function hashStringToSeed(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash + char);
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
 export function getCabinetSales(cabinetId: string, days: number = 14): DailySalesData[] {
   const data: DailySalesData[] = [];
   const cabinet = mockCabinets.find(c => c.id === cabinetId);
   const today = new Date();
-  
+  const dateStr = today.toISOString().split('T')[0];
+  const baseSeed = hashStringToSeed(cabinetId + dateStr + String(days));
+
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
+    const daySeed = baseSeed + i * 9973;
     const base = cabinet?.todaySales || 1000;
-    const variation = 0.7 + Math.random() * 0.6;
+    const variation = 0.7 + seededRandom(daySeed) * 0.6;
     
     data.push({
       date: date.toISOString().split('T')[0],

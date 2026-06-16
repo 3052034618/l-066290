@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Plus, Clock, CheckCircle2, Loader2, MapPin, Calendar } from 'lucide-react';
+import { AlertTriangle, Plus, Clock, CheckCircle2, Loader2, MapPin, Calendar, User, ChevronDown, CheckCircle } from 'lucide-react';
 import { useExceptionStore } from '@/store/exceptionStore';
 import { useAnalyticsStore } from '@/store/analyticsStore';
 import { useCabinetStore } from '@/store/cabinetStore';
+import { useTaskStore } from '@/store/taskStore';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
 import { getExceptionTypeText } from '@/utils/format';
@@ -29,22 +30,28 @@ const ExceptionsPage: React.FC = () => {
     selectedType,
     setSelectedType,
     addException,
+    updateExceptionHandler,
     updateStatus,
     getStats,
   } = useExceptionStore();
   const { getPaymentExceptions } = useAnalyticsStore();
   const { cabinets } = useCabinetStore();
+  const { inspectors, createTask, assignTask } = useTaskStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showInspectorDropdown, setShowInspectorDropdown] = useState(false);
   const [formData, setFormData] = useState({
     cabinetId: '',
     type: 'device_fault' as ExceptionType,
     severity: 'medium' as ExceptionSeverity,
     description: '',
+    handlerId: '',
+    handlerName: '',
   });
 
   const stats = getStats();
   const paymentExceptions = getPaymentExceptions();
+  const selectedInspector = inspectors.find(i => i.id === formData.handlerId);
 
   const filteredByStatus = useMemo(() => {
     const filtered = selectedType === 'all'
@@ -57,17 +64,46 @@ const ExceptionsPage: React.FC = () => {
     };
   }, [exceptions, selectedType]);
 
+  const getExceptionTypeTaskType = (type: ExceptionType): 'maintenance' | 'inspection' => {
+    if (type === 'device_fault' || type === 'network_error') return 'maintenance';
+    return 'inspection';
+  };
+
   const handleSubmit = () => {
     if (!formData.cabinetId || !formData.description) return;
-    addException({
+
+    const selectedCabinet = cabinets.find(c => c.id === formData.cabinetId);
+
+    const exceptionId = addException({
       cabinetId: formData.cabinetId,
-      cabinet: cabinets.find(c => c.id === formData.cabinetId),
+      cabinet: selectedCabinet,
       type: formData.type,
       severity: formData.severity,
       description: formData.description,
     });
-    setFormData({ cabinetId: '', type: 'device_fault', severity: 'medium', description: '' });
+
+    if (formData.handlerId) {
+      updateExceptionHandler(exceptionId, formData.handlerId, formData.handlerName);
+      
+      const taskId = `t${Date.now()}`;
+      const priority = formData.severity === 'critical' || formData.severity === 'high' ? 'urgent' : 'high';
+      
+      createTask({
+        id: taskId,
+        cabinetId: formData.cabinetId,
+        cabinet: selectedCabinet,
+        type: getExceptionTypeTaskType(formData.type),
+        priority,
+        description: formData.description || `${selectedCabinet?.name || '未知货柜'} - ${getExceptionTypeText(formData.type)}处理`,
+        dueTime: new Date(Date.now() + 3 * 3600 * 1000),
+      });
+      
+      assignTask(taskId, formData.handlerId);
+    }
+
+    setFormData({ cabinetId: '', type: 'device_fault', severity: 'medium', description: '', handlerId: '', handlerName: '' });
     setIsModalOpen(false);
+    setShowInspectorDropdown(false);
   };
 
   return (
@@ -204,7 +240,8 @@ const ExceptionsPage: React.FC = () => {
                       )}
                     </div>
                     {item.handlerName && (
-                      <div className="mt-2 pt-2 border-t border-neutral-100">
+                      <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center gap-1.5">
+                        <User size={12} className="text-neutral-400" />
                         <span className="text-xs text-neutral-500">处理人: {item.handlerName}</span>
                       </div>
                     )}
@@ -262,11 +299,17 @@ const ExceptionsPage: React.FC = () => {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="登记设备故障"
+        onClose={() => {
+          setIsModalOpen(false);
+          setShowInspectorDropdown(false);
+        }}
+        title="登记异常"
         footer={
           <>
-            <button className="btn-secondary" onClick={() => setIsModalOpen(false)}>
+            <button className="btn-secondary" onClick={() => {
+              setIsModalOpen(false);
+              setShowInspectorDropdown(false);
+            }}>
               取消
             </button>
             <button
@@ -301,43 +344,112 @@ const ExceptionsPage: React.FC = () => {
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">
               异常类型
             </label>
-            <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as ExceptionType })}
-              className="input-field"
-            >
-              <option value="device_fault">设备故障</option>
-              <option value="payment_error">支付异常</option>
-              <option value="temperature_abnormal">温度异常</option>
-              <option value="network_error">网络故障</option>
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              {(['device_fault', 'payment_error', 'temperature_abnormal', 'network_error'] as ExceptionType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setFormData({ ...formData, type })}
+                  className={`px-3 py-2.5 rounded-lg text-sm border transition-colors ${
+                    formData.type === type
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 font-medium'
+                      : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                  }`}
+                >
+                  {getExceptionTypeText(type)}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">
               严重程度
             </label>
-            <select
-              value={formData.severity}
-              onChange={(e) => setFormData({ ...formData, severity: e.target.value as ExceptionSeverity })}
-              className="input-field"
-            >
-              <option value="low">低</option>
-              <option value="medium">中</option>
-              <option value="high">高</option>
-              <option value="critical">紧急</option>
-            </select>
+            <div className="flex gap-2">
+              {(['low', 'medium', 'high', 'critical'] as ExceptionSeverity[]).map((sev) => (
+                <button
+                  key={sev}
+                  onClick={() => setFormData({ ...formData, severity: sev })}
+                  className={`flex-1 px-2 py-2 rounded-lg text-sm border transition-colors ${
+                    formData.severity === sev
+                      ? sev === 'critical' || sev === 'high'
+                        ? 'border-danger-500 bg-danger-50 text-danger-700 font-medium'
+                        : sev === 'medium'
+                        ? 'border-warning-500 bg-warning-50 text-warning-700 font-medium'
+                        : 'border-success-500 bg-success-50 text-success-700 font-medium'
+                      : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                  }`}
+                >
+                  {sev === 'low' ? '低' : sev === 'medium' ? '中' : sev === 'high' ? '高' : '紧急'}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">
-              故障描述 <span className="text-danger-500">*</span>
+              异常描述 <span className="text-danger-500">*</span>
             </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={4}
-              placeholder="请详细描述故障情况..."
+              placeholder="请详细描述异常情况..."
               className="input-field resize-none"
             />
+          </div>
+
+          <div className="relative">
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+              安排处理人员 <span className="text-neutral-400 font-normal">（可选，将自动生成处理任务）</span>
+            </label>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowInspectorDropdown(!showInspectorDropdown);
+              }}
+              className="w-full input-field flex items-center justify-between"
+            >
+              {selectedInspector ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xs font-medium">
+                    {selectedInspector.name[0]}
+                  </div>
+                  <span className="text-neutral-800">{selectedInspector.name}</span>
+                  <span className="text-xs text-neutral-400">{selectedInspector.area}</span>
+                  <span className="text-xs text-neutral-400">·</span>
+                  <span className="text-xs text-neutral-400">{selectedInspector.pendingTasks}个待办</span>
+                </div>
+              ) : (
+                <span className="text-neutral-400">请选择处理人员（可选）</span>
+              )}
+              <ChevronDown size={16} className="text-neutral-400" />
+            </button>
+            {showInspectorDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-dropdown border border-neutral-100 py-1 z-20 max-h-48 overflow-y-auto">
+                {inspectors.map((ins) => (
+                  <button
+                    key={ins.id}
+                    onClick={() => {
+                      setFormData({ ...formData, handlerId: ins.id, handlerName: ins.name });
+                      setShowInspectorDropdown(false);
+                    }}
+                    className={`w-full px-3 py-2.5 flex items-center gap-3 hover:bg-neutral-50 text-left ${
+                      formData.handlerId === ins.id ? 'bg-primary-50' : ''
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-medium">
+                      {ins.name[0]}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-neutral-800">{ins.name}</div>
+                      <div className="text-xs text-neutral-500">{ins.area} · {ins.pendingTasks}个待办</div>
+                    </div>
+                    {formData.handlerId === ins.id && (
+                      <CheckCircle size={16} className="text-primary-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Modal>

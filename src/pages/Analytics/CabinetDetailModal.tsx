@@ -20,7 +20,6 @@ const CabinetDetailModal: React.FC<CabinetDetailModalProps> = ({ cabinetId, isOp
   const detail = useMemo(() => {
     if (!cabinetId) return null;
     return getCabinetDetail(cabinetId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinetId, getCabinetDetail]);
 
   if (!detail) return null;

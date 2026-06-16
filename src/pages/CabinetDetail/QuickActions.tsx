@@ -7,7 +7,6 @@ import { useExceptionStore } from '@/store/exceptionStore';
 import { useProductStore } from '@/store/productStore';
 import { Cabinet, ExceptionType, ExceptionSeverity } from '@/types';
 import { formatCurrency } from '@/utils/format';
-import { getDaysUntil } from '@/utils/date';
 
 interface QuickActionsProps {
   cabinet: Cabinet;

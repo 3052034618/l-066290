@@ -26,7 +26,7 @@ import { formatDate } from '@/utils/date';
 import { Task, TaskProductResult } from '@/types';
 
 const ReplenishmentPage: React.FC = () => {
-  const { getReplenishmentTasks, inspectors, assignTask, completeReplenishmentTask, updateTaskStatus } = useTaskStore();
+  const { tasks, inspectors, assignTask, completeReplenishmentTask, updateTaskStatus } = useTaskStore();
 
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
@@ -37,7 +37,7 @@ const ReplenishmentPage: React.FC = () => {
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotoUrl, setCompletionPhotoUrl] = useState('');
 
-  const replenishmentTasks = useMemo(() => getReplenishmentTasks(), [getReplenishmentTasks]);
+  const replenishmentTasks = useMemo(() => tasks.filter(t => t.type === 'replenishment'), [tasks]);
 
   const pendingTasks = useMemo(
     () => replenishmentTasks.filter((t) => t.status === 'pending' || t.status === 'assigned'),
@@ -51,6 +51,12 @@ const ReplenishmentPage: React.FC = () => {
     () => replenishmentTasks.filter((t) => t.status === 'completed'),
     [replenishmentTasks]
   );
+
+  const stats = useMemo(() => ({
+    pending: pendingTasks.length,
+    inProgress: inProgressTasks.length,
+    completed: completedTasks.length,
+  }), [pendingTasks, inProgressTasks, completedTasks]);
 
   const tasksByArea = useMemo(() => {
     const map: Record<string, Task[]> = {};
@@ -111,14 +117,23 @@ const ReplenishmentPage: React.FC = () => {
   };
 
   const handleConfirmComplete = () => {
-    if (selectedTask) {
-      completeReplenishmentTask(selectedTask.id, completionResults, completionNote, completionPhotoUrl || undefined);
-      setCompleteModalOpen(false);
-      setSelectedTask(null);
-      setCompletionResults([]);
-      setCompletionNote('');
-      setCompletionPhotoUrl('');
+    if (!selectedTask) return;
+
+    const hasMissingReason = completionResults.some(
+      (r) => r.actualQuantity < r.expectedQuantity && !r.shortageReason
+    );
+
+    if (hasMissingReason) {
+      alert('请为所有未按计划补货的商品选择缺货原因');
+      return;
     }
+
+    completeReplenishmentTask(selectedTask.id, completionResults, completionNote, completionPhotoUrl || undefined);
+    setCompleteModalOpen(false);
+    setSelectedTask(null);
+    setCompletionResults([]);
+    setCompletionNote('');
+    setCompletionPhotoUrl('');
   };
 
   const updateResultActualQuantity = (index: number, value: number) => {
@@ -163,7 +178,7 @@ const ReplenishmentPage: React.FC = () => {
       <div className="grid grid-cols-4 gap-4 mb-6">
         <StatCard
           title="待补货任务"
-          value={pendingTasks.length}
+          value={stats.pending}
           suffix="单"
           icon={Package}
           iconBg="bg-warning-50"
@@ -171,7 +186,7 @@ const ReplenishmentPage: React.FC = () => {
         />
         <StatCard
           title="进行中"
-          value={inProgressTasks.length}
+          value={stats.inProgress}
           suffix="单"
           icon={Navigation}
           iconBg="bg-primary-50"
@@ -179,7 +194,7 @@ const ReplenishmentPage: React.FC = () => {
         />
         <StatCard
           title="已完成"
-          value={completedTasks.length}
+          value={stats.completed}
           suffix="单"
           icon={CheckCircle}
           iconBg="bg-success-50"
@@ -553,7 +568,11 @@ const ReplenishmentPage: React.FC = () => {
               <X size={16} />
               取消
             </button>
-            <button onClick={handleConfirmComplete} className="btn-success flex items-center gap-1.5">
+            <button
+              className="btn-success flex items-center gap-1.5"
+              onClick={handleConfirmComplete}
+              disabled={completionResults.some(r => r.actualQuantity < r.expectedQuantity && !r.shortageReason)}
+            >
               <CheckCheck size={16} />
               确认完成
             </button>
