@@ -32,6 +32,7 @@ const ExceptionsPage: React.FC = () => {
     addException,
     updateExceptionHandler,
     updateStatus,
+    setRelatedTask,
     getStats,
   } = useExceptionStore();
   const { getPaymentExceptions } = useAnalyticsStore();
@@ -96,9 +97,11 @@ const ExceptionsPage: React.FC = () => {
         priority,
         description: formData.description || `${selectedCabinet?.name || '未知货柜'} - ${getExceptionTypeText(formData.type)}处理`,
         dueTime: new Date(Date.now() + 3 * 3600 * 1000),
+        exceptionId,
       });
       
       assignTask(taskId, formData.handlerId);
+      setRelatedTask(exceptionId, taskId);
     }
 
     setFormData({ cabinetId: '', type: 'device_fault', severity: 'medium', description: '', handlerId: '', handlerName: '' });
@@ -243,6 +246,12 @@ const ExceptionsPage: React.FC = () => {
                       <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center gap-1.5">
                         <User size={12} className="text-neutral-400" />
                         <span className="text-xs text-neutral-500">处理人: {item.handlerName}</span>
+                      </div>
+                    )}
+                    {item.relatedTaskId && (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <CheckCircle size={12} className="text-primary-400" />
+                        <span className="text-xs text-neutral-500">已生成任务待办</span>
                       </div>
                     )}
                   </div>

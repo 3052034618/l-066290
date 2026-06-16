@@ -17,6 +17,7 @@ import {
   X,
   CheckCheck,
   AlertCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Modal from '@/components/ui/Modal';
@@ -30,12 +31,24 @@ const ReplenishmentPage: React.FC = () => {
 
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedDetailTask, setSelectedDetailTask] = useState<Task | null>(null);
   const [selectedInspector, setSelectedInspector] = useState('');
 
   const [completionResults, setCompletionResults] = useState<TaskProductResult[]>([]);
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotoUrl, setCompletionPhotoUrl] = useState('');
+
+  const handleOpenDetailModal = (task: Task) => {
+    setSelectedDetailTask(task);
+    setDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setDetailModalOpen(false);
+    setSelectedDetailTask(null);
+  };
 
   const replenishmentTasks = useMemo(() => tasks.filter(t => t.type === 'replenishment'), [tasks]);
 
@@ -73,6 +86,16 @@ const ReplenishmentPage: React.FC = () => {
       .sort((a, b) => b[1].length - a[1].length)
       .map(([area, tasks]) => ({ area, tasks }));
   }, [tasksByArea]);
+
+  const detailSummary = useMemo(() => {
+    if (!selectedDetailTask) return null;
+    const results = selectedDetailTask.completionResults || [];
+    const totalExpected = results.reduce((sum, r) => sum + r.expectedQuantity, 0);
+    const totalActual = results.reduce((sum, r) => sum + r.actualQuantity, 0);
+    const shortageCount = results.filter(r => r.actualQuantity < r.expectedQuantity).length;
+    const completionRate = totalExpected > 0 ? (totalActual / totalExpected * 100).toFixed(1) + '%' : '0.0%';
+    return { totalExpected, totalActual, shortageCount, completionRate };
+  }, [selectedDetailTask]);
 
   const handleOpenAssignModal = (task: Task) => {
     setSelectedTask(task);
@@ -269,6 +292,12 @@ const ReplenishmentPage: React.FC = () => {
                               需补 {task.products.length} 种商品
                             </div>
                           )}
+                          {task.exceptionId && (
+                            <div className="flex items-center gap-1.5 text-sm text-danger-600">
+                              <AlertTriangle size={14} />
+                              来自异常
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -353,6 +382,12 @@ const ReplenishmentPage: React.FC = () => {
                                 需补 {task.products.length} 种商品
                               </div>
                             )}
+                            {task.exceptionId && (
+                              <div className="flex items-center gap-1.5 text-sm text-danger-600">
+                                <AlertTriangle size={14} />
+                                来自异常
+                              </div>
+                            )}
                           </div>
 
                           {task.products && task.products.length > 0 && (
@@ -384,7 +419,11 @@ const ReplenishmentPage: React.FC = () => {
                 <span className="text-xs text-neutral-400">显示最近5条</span>
               </div>
               {completedTasks.slice(0, 5).map((task) => (
-                <div key={task.id} className="card p-3 bg-neutral-50/50">
+                <div
+                  key={task.id}
+                  className="card p-3 bg-neutral-50/50 shadow-card-hover cursor-pointer transition-all"
+                  onClick={() => handleOpenDetailModal(task)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <CheckCircle size={16} className="text-success-500" />
@@ -692,6 +731,149 @@ const ReplenishmentPage: React.FC = () => {
               >
                 {completionPhotoUrl ? '清除照片' : '模拟添加完成照片'}
               </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={detailModalOpen}
+        onClose={handleCloseDetailModal}
+        title="补货交接记录"
+        size="lg"
+        footer={
+          <button onClick={handleCloseDetailModal} className="btn-secondary">
+            关闭
+          </button>
+        }
+      >
+        {selectedDetailTask && detailSummary && (
+          <div className="space-y-5">
+            <div className="bg-success-50 border border-success-100 rounded-xl p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-neutral-800">{selectedDetailTask.cabinet?.name}</h3>
+                  <p className="text-sm text-neutral-500 flex items-center gap-1 mt-0.5">
+                    <MapPin size={14} />
+                    {selectedDetailTask.cabinet?.address}
+                  </p>
+                </div>
+                <div className="text-right space-y-1">
+                  <div className="flex items-center gap-1 text-sm text-neutral-500 justify-end">
+                    <User size={14} />
+                    <span>{selectedDetailTask.inspector?.name || '未指派'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm text-neutral-500 justify-end">
+                    <Clock size={14} />
+                    <span>{selectedDetailTask.completedAt ? formatDate(selectedDetailTask.completedAt, 'YYYY-MM-DD HH:mm') : '—'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-3 flex items-center gap-1.5">
+                <Package size={14} />
+                商品明细
+              </label>
+              <div className="border border-neutral-200 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-neutral-50">
+                    <tr>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-neutral-500">商品名称</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-medium text-neutral-500 w-20">计划补货</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-medium text-neutral-500 w-20">实际补货</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-medium text-neutral-500 w-20">差异数量</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-neutral-500">缺货原因</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedDetailTask.completionResults || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-8 text-center text-neutral-400 text-sm">
+                          暂无补货明细
+                        </td>
+                      </tr>
+                    ) : (
+                      (selectedDetailTask.completionResults || []).map((r, idx) => {
+                        const diff = r.actualQuantity - r.expectedQuantity;
+                        const isShortage = r.actualQuantity < r.expectedQuantity;
+                        return (
+                          <tr key={idx} className={`border-t border-neutral-50 ${isShortage ? 'bg-warning-50' : ''}`}>
+                            <td className="px-3 py-2.5 text-neutral-700 font-medium flex items-center gap-1.5">
+                              {isShortage && <AlertTriangle size={14} className="text-warning-500 flex-shrink-0" />}
+                              {r.productName}
+                            </td>
+                            <td className="px-3 py-2.5 text-center text-neutral-500">{r.expectedQuantity}</td>
+                            <td className="px-3 py-2.5 text-center text-neutral-700 font-medium">{r.actualQuantity}</td>
+                            <td className="px-3 py-2.5 text-center">
+                              {isShortage ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-warning-50 text-warning-700 text-xs font-medium">
+                                  {diff}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-500">{diff}</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-sm text-neutral-500">
+                              {r.shortageReason || <span className="text-neutral-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2 flex items-center gap-1.5">
+                <FileText size={14} />
+                备注说明
+              </label>
+              <div className="p-3 bg-neutral-50 rounded-xl text-sm text-neutral-600">
+                {selectedDetailTask.completionNote || <span className="text-neutral-400">未填写备注</span>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-2 flex items-center gap-1.5">
+                <Camera size={14} />
+                完成照片
+              </label>
+              {selectedDetailTask.completionPhotoUrl ? (
+                <div className="grid grid-cols-4 gap-3">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-square rounded-xl bg-success-50 flex items-center justify-center text-success-500 border border-success-100">
+                      <Camera size={28} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-neutral-400">未上传完成照片</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              <div className="p-3 bg-neutral-50 rounded-xl text-center">
+                <p className="text-xs text-neutral-500 mb-1">计划补货总件数</p>
+                <p className="text-xl font-bold text-neutral-800">{detailSummary.totalExpected}</p>
+              </div>
+              <div className="p-3 bg-neutral-50 rounded-xl text-center">
+                <p className="text-xs text-neutral-500 mb-1">实际补货总件数</p>
+                <p className="text-xl font-bold text-neutral-800">{detailSummary.totalActual}</p>
+              </div>
+              <div className="p-3 bg-neutral-50 rounded-xl text-center">
+                <p className="text-xs text-neutral-500 mb-1">少补商品数</p>
+                <p className="text-xl font-bold text-neutral-800">{detailSummary.shortageCount}</p>
+              </div>
+              <div className="p-3 bg-neutral-50 rounded-xl text-center">
+                <p className="text-xs text-neutral-500 mb-1">完成率</p>
+                <p className={`text-xl font-bold ${detailSummary.completionRate === '100.0%' ? 'text-success-600' : 'text-warning-600'}`}>
+                  {detailSummary.completionRate}
+                </p>
+              </div>
             </div>
           </div>
         )}

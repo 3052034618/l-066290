@@ -67,6 +67,7 @@ export interface ExceptionRecord {
   handlerName?: string;
   createdAt: Date;
   resolvedAt?: Date;
+  relatedTaskId?: string;
 }
 
 export type TaskType = 'replenishment' | 'maintenance' | 'inspection' | 'price_adjustment';
@@ -98,6 +99,7 @@ export interface Task {
   completionResults?: TaskProductResult[];
   completionNote?: string;
   completionPhotoUrl?: string;
+  exceptionId?: string;
 }
 
 export interface Inspector {

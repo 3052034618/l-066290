@@ -62,9 +62,9 @@ const getIconBg = (type: CabinetSuggestion['type']) => {
 };
 
 const CabinetSuggestionPanel: React.FC<CabinetSuggestionPanelProps> = ({ cabinetId, compact = false }) => {
-  const generateCabinetSuggestions = useAnalyticsStore((s) => s.generateCabinetSuggestions);
+  const { generateCabinetSuggestions, timeRange } = useAnalyticsStore();
   
-  const suggestions = useMemo(() => generateCabinetSuggestions(cabinetId), [cabinetId, generateCabinetSuggestions]);
+  const suggestions = useMemo(() => generateCabinetSuggestions(cabinetId), [cabinetId, generateCabinetSuggestions, timeRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (suggestions.length === 0) return null;
 

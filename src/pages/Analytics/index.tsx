@@ -4,6 +4,8 @@ import { useAnalyticsStore } from '@/store/analyticsStore';
 import StatCard from '@/components/ui/StatCard';
 import LineAreaChart from '@/components/chart/LineAreaChart';
 import BarChart from '@/components/chart/BarChart';
+import MultiLineChart from '@/components/chart/MultiLineChart';
+import EmptyState from '@/components/ui/EmptyState';
 import CabinetDetailModal from './CabinetDetailModal';
 
 const timeRanges: { key: '7d' | '14d' | '30d'; label: string }[] = [
@@ -12,6 +14,9 @@ const timeRanges: { key: '7d' | '14d' | '30d'; label: string }[] = [
   { key: '30d', label: '30天' },
 ];
 
+const COMPARE_PALETTE = ['#1677FF', '#00B42A', '#FF7D00', '#F53F3F', '#722ED1', '#14C9C9', '#86909C', '#FFC53D'];
+const MAX_CABINETS = 6;
+
 const AnalyticsPage: React.FC = () => {
   const {
     dailySales,
@@ -19,11 +24,50 @@ const AnalyticsPage: React.FC = () => {
     timeRange,
     setTimeRange,
     getOverviewStats,
+    getCabinetDailySales,
     exportDailyReport,
   } = useAnalyticsStore();
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string>('');
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  const cabinetList = useMemo(() => {
+    return cabinetRevenues.map((cr) => ({
+      cabinetId: cr.cabinetId,
+      cabinetName: cr.cabinetName,
+    }));
+  }, [cabinetRevenues]);
+
+  const [selectedCabinetIds, setSelectedCabinetIds] = useState<string[]>(() => {
+    return cabinetRevenues.slice(0, 3).map((cr) => cr.cabinetId);
+  });
+
+  const isCabinetSelected = (cabinetId: string) => selectedCabinetIds.includes(cabinetId);
+  const canSelectMore = selectedCabinetIds.length < MAX_CABINETS;
+
+  const toggleCabinet = (cabinetId: string) => {
+    setSelectedCabinetIds((prev) => {
+      if (prev.includes(cabinetId)) {
+        return prev.filter((id) => id !== cabinetId);
+      }
+      if (prev.length >= MAX_CABINETS) {
+        return prev;
+      }
+      return [...prev, cabinetId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedCabinetIds(cabinetList.slice(0, MAX_CABINETS).map((c) => c.cabinetId));
+  };
+
+  const handleClearAll = () => {
+    setSelectedCabinetIds([]);
+  };
+
+  const selectedCabinets = useMemo(() => {
+    return cabinetList.filter((c) => selectedCabinetIds.includes(c.cabinetId));
+  }, [cabinetList, selectedCabinetIds]);
 
   const stats = getOverviewStats();
 
@@ -42,6 +86,51 @@ const AnalyticsPage: React.FC = () => {
         本周营收: cr.weekRevenue,
       }));
   }, [cabinetRevenues]);
+
+  const comparisonChartData = useMemo(() => {
+    if (selectedCabinetIds.length === 0) return [] as Array<{ date: string; [key: string]: number | string }>;
+
+    const allDates = new Set<string>();
+    const cabinetSalesMap: Record<string, Record<string, { sales: number; orders: number }>> = {};
+
+    selectedCabinetIds.forEach((cabinetId) => {
+      const dailyData = getCabinetDailySales(cabinetId);
+      cabinetSalesMap[cabinetId] = {};
+      dailyData.forEach((d) => {
+        allDates.add(d.date);
+        cabinetSalesMap[cabinetId][d.date] = { sales: d.sales, orders: d.orders };
+      });
+    });
+
+    const sortedDates = Array.from(allDates).sort();
+
+    return sortedDates.map((date) => {
+      const row: { date: string; [key: string]: number | string } = { date };
+      selectedCabinetIds.forEach((cabinetId) => {
+        const data = cabinetSalesMap[cabinetId][date];
+        row[`${cabinetId}_sales`] = data ? data.sales : 0;
+        row[`${cabinetId}_orders`] = data ? data.orders : 0;
+      });
+      return row;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCabinetIds, timeRange, getCabinetDailySales]);
+
+  const salesSeries = useMemo(() => {
+    return selectedCabinets.map((cabinet, idx) => ({
+      key: `${cabinet.cabinetId}_sales`,
+      name: cabinet.cabinetName,
+      color: COMPARE_PALETTE[idx % COMPARE_PALETTE.length],
+    }));
+  }, [selectedCabinets]);
+
+  const ordersSeries = useMemo(() => {
+    return selectedCabinets.map((cabinet, idx) => ({
+      key: `${cabinet.cabinetId}_orders`,
+      name: cabinet.cabinetName,
+      color: COMPARE_PALETTE[idx % COMPARE_PALETTE.length],
+    }));
+  }, [selectedCabinets]);
 
   const handleBarClick = (data: { name: string; cabinetId?: string }) => {
     if (data.cabinetId) {
@@ -150,6 +239,87 @@ const AnalyticsPage: React.FC = () => {
 
       <div className="card p-6 mb-6">
         <LineAreaChart data={filteredDailySales} height={300} showOrders />
+      </div>
+
+      <div className="card p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-neutral-800">点位销售对比</h3>
+          <span className="text-sm text-neutral-500">
+            已选 {selectedCabinetIds.length}/{MAX_CABINETS} 个货柜
+          </span>
+        </div>
+
+        <div className="mb-4">
+          <div className="flex items-center gap-4 mb-3">
+            <button
+              onClick={handleSelectAll}
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+            >
+              全选
+            </button>
+            <button
+              onClick={handleClearAll}
+              className="text-sm text-neutral-500 hover:text-neutral-700 font-medium transition-colors"
+            >
+              清空
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {cabinetList.map((cabinet) => {
+              const selected = isCabinetSelected(cabinet.cabinetId);
+              const disabled = !selected && !canSelectMore;
+              return (
+                <label
+                  key={cabinet.cabinetId}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer text-sm transition-all ${
+                    selected
+                      ? 'bg-primary-50 border-primary-200 text-primary-700'
+                      : disabled
+                      ? 'bg-neutral-50 border-neutral-100 text-neutral-300 cursor-not-allowed'
+                      : 'bg-white border-neutral-200 text-neutral-600 hover:border-primary-200 hover:bg-primary-50/50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    disabled={disabled}
+                    onChange={() => toggleCabinet(cabinet.cabinetId)}
+                    className="w-4 h-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500 focus:ring-offset-0 disabled:cursor-not-allowed"
+                  />
+                  <span className="whitespace-nowrap">{cabinet.cabinetName}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedCabinets.length === 0 ? (
+          <EmptyState
+            title="请选择货柜"
+            description="选择至少一个货柜以查看销售对比数据"
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm font-semibold text-neutral-700 mb-3">销售额对比</h4>
+              <MultiLineChart
+                data={comparisonChartData}
+                series={salesSeries}
+                height={280}
+                yAxisFormatter="currency"
+              />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-neutral-700 mb-3">订单数对比</h4>
+              <MultiLineChart
+                data={comparisonChartData}
+                series={ordersSeries}
+                height={280}
+                yAxisFormatter="number"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card p-6">

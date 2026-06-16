@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { ExceptionRecord, ExceptionStatus, ExceptionType } from '@/types';
+import { ExceptionRecord, ExceptionStatus, ExceptionType, TaskStatus } from '@/types';
 import { mockExceptions } from '@/mock/exceptions';
+import { useTaskStore } from './taskStore';
 
 interface ExceptionState {
   exceptions: ExceptionRecord[];
@@ -10,9 +11,10 @@ interface ExceptionState {
   setSelectedType: (type: ExceptionType | 'all') => void;
   getFilteredExceptions: () => ExceptionRecord[];
   getByStatus: (status: ExceptionStatus) => ExceptionRecord[];
-  addException: (data: Omit<ExceptionRecord, 'id' | 'createdAt' | 'status'>) => string;
+  addException: (data: Omit<ExceptionRecord, 'id' | 'createdAt' | 'status'> & { relatedTaskId?: string }) => string;
   updateExceptionHandler: (id: string, handlerId: string, handlerName: string) => void;
   updateStatus: (id: string, status: ExceptionStatus, handlerId?: string, handlerName?: string) => void;
+  setRelatedTask: (exceptionId: string, taskId: string) => void;
   getStats: () => {
     total: number;
     pending: number;
@@ -55,6 +57,14 @@ export const useExceptionStore = create<ExceptionState>((set, get) => ({
     return newException.id;
   },
   
+  setRelatedTask: (exceptionId, taskId) => {
+    set(state => ({
+      exceptions: state.exceptions.map(e =>
+        e.id === exceptionId ? { ...e, relatedTaskId: taskId } : e
+      ),
+    }));
+  },
+  
   updateExceptionHandler: (id, handlerId, handlerName) => {
     set(state => ({
       exceptions: state.exceptions.map(e => 
@@ -66,6 +76,15 @@ export const useExceptionStore = create<ExceptionState>((set, get) => ({
   },
   
   updateStatus: (id, status, handlerId, handlerName) => {
+    const ex = get().exceptions.find(e => e.id === id);
+    let taskStatus: TaskStatus | null = null;
+    if (status === 'processing') taskStatus = 'in_progress';
+    else if (status === 'resolved') taskStatus = 'completed';
+    
+    if (ex?.relatedTaskId && taskStatus) {
+      useTaskStore.getState().updateTaskStatus(ex.relatedTaskId, taskStatus);
+    }
+    
     set(state => ({
       exceptions: state.exceptions.map(e => 
         e.id === id 

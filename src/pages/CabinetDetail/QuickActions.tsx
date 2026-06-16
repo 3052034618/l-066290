@@ -14,7 +14,7 @@ interface QuickActionsProps {
 
 const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
   const { createTask, inspectors, assignTask } = useTaskStore();
-  const { addException } = useExceptionStore();
+  const { addException, setRelatedTask } = useExceptionStore();
   const { products, updatePrice, getLowStockItems, getExpiringItems } = useProductStore();
 
   const [showReplenishModal, setShowReplenishModal] = useState(false);
@@ -88,16 +88,18 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
       dueTime: new Date(Date.now() + 2 * 3600 * 1000),
     });
 
-    addException({
+    const expId = addException({
       cabinetId: cabinet.id,
       cabinet,
       type: 'device_fault',
       severity: 'high',
       description: repairDesc || `${cabinet.name} - 设备故障报修`,
+      relatedTaskId: taskId,
     });
 
     if (selectedInspectorId) {
       assignTask(taskId, selectedInspectorId);
+      useExceptionStore.getState().updateExceptionHandler(expId, selectedInspectorId, selectedInspector?.name || '');
     }
 
     setShowRepairModal(false);
@@ -130,8 +132,10 @@ const QuickActions: React.FC<QuickActionsProps> = ({ cabinet }) => {
         priority: exceptionSeverity === 'critical' || exceptionSeverity === 'high' ? 'urgent' : 'high',
         description: exceptionDesc || `${cabinet.name} - ${getExceptionTypeText(exceptionType)}处理`,
         dueTime: new Date(Date.now() + 3 * 3600 * 1000),
+        exceptionId: expId,
       });
       assignTask(taskId, selectedInspectorId);
+      setRelatedTask(expId, taskId);
       
       useExceptionStore.getState().updateExceptionHandler(expId, selectedInspectorId, selectedInspector?.name || '');
     }
